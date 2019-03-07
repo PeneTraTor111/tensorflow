@@ -94,13 +94,15 @@ def main(_):
         "sepal_length", "sepal_width", "petal_length", "petal_width", "label"]
     batch_size = 32
     def training_input_fn():
-      return tf.contrib.data.make_csv_dataset(
-          [training_data_path], batch_size,
-          column_names=column_names, label_name="label")
+      return tf.data.experimental.make_csv_dataset([training_data_path],
+                                                   batch_size,
+                                                   column_names=column_names,
+                                                   label_name="label")
     def test_input_fn():
-      return tf.contrib.data.make_csv_dataset(
-          [test_data_path], batch_size,
-          column_names=column_names, label_name="label")
+      return tf.data.experimental.make_csv_dataset([test_data_path],
+                                                   batch_size,
+                                                   column_names=column_names,
+                                                   label_name="label")
     feature_columns = [tf.feature_column.numeric_column(feature)
                        for feature in column_names[:-1]]
 
@@ -113,17 +115,16 @@ def main(_):
       n_classes=3,
       model_dir=model_dir)
 
-  hooks = None
   if FLAGS.debug and FLAGS.tensorboard_debug_address:
     raise ValueError(
         "The --debug and --tensorboard_debug_address flags are mutually "
         "exclusive.")
+  hooks = []
   if FLAGS.debug:
-    debug_hook = tf_debug.LocalCLIDebugHook(ui_type=FLAGS.ui_type,
-                                            dump_root=FLAGS.dump_root)
+    hooks.append(tf_debug.LocalCLIDebugHook(ui_type=FLAGS.ui_type,
+                                            dump_root=FLAGS.dump_root))
   elif FLAGS.tensorboard_debug_address:
-    debug_hook = tf_debug.TensorBoardDebugHook(FLAGS.tensorboard_debug_address)
-  hooks = [debug_hook]
+    hooks.append(tf_debug.TensorBoardDebugHook(FLAGS.tensorboard_debug_address))
 
   # Train model, using tfdbg hook.
   classifier.train(training_input_fn,
@@ -140,7 +141,7 @@ def main(_):
 
   # Make predictions, using tfdbg hook.
   predict_results = classifier.predict(test_input_fn, hooks=hooks)
-  print("A prediction result: %s" % predict_results.next())
+  print("A prediction result: %s" % next(predict_results))
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ limitations under the License.
 #include <cmath>
 #include <type_traits>
 
+#include "tensorflow/core/framework/bounds_check.h"
 #include "tensorflow/core/framework/numeric_op.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
@@ -26,7 +27,6 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_types.h"
 #include "tensorflow/core/framework/types.h"
-#include "tensorflow/core/kernels/bounds_check.h"
 #include "tensorflow/core/kernels/conv_ops.h"
 #include "tensorflow/core/kernels/depthwise_conv_op.h"
 #include "tensorflow/core/kernels/ops_util.h"
@@ -290,7 +290,7 @@ class DepthwiseConv2dNativeOp : public BinaryOp<T> {
     OP_REQUIRES_OK(context, context->GetAttr("padding", &padding_));
 
     // For in_depth == 1 and grouped convolutions.
-    use_cudnn_ = CanUseCudnn();
+    use_cudnn_ = CanUseCudnn() && std::is_same<Device, GPUDevice>::value;
     cudnn_use_autotune_ = CudnnUseAutotune();
     use_cudnn_grouped_conv_ = false;
     dtype_ = DataTypeToEnum<T>::value;
@@ -404,7 +404,8 @@ class DepthwiseConv2dNativeOp : public BinaryOp<T> {
       // conv is supported.
       launcher_(context, use_cudnn_, cudnn_use_autotune_, input,
                 reshaped_filter, /*row_dilation=*/1, /*col_dilation=*/1,
-                stride_, stride_, padding_, output, data_format_);
+                stride_, stride_, padding_, /*explicit_paddings=*/{}, output,
+                data_format_);
       return;
     }
 

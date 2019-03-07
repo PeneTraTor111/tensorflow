@@ -18,6 +18,7 @@ limitations under the License.
 #include <algorithm>
 #include <cmath>
 
+#include "tensorflow/core/framework/bounds_check.h"
 #include "tensorflow/core/framework/numeric_op.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
@@ -25,7 +26,6 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_types.h"
 #include "tensorflow/core/framework/types.h"
-#include "tensorflow/core/kernels/bounds_check.h"
 #include "tensorflow/core/kernels/conv_grad_ops.h"
 #include "tensorflow/core/kernels/depthwise_conv_op.h"
 #include "tensorflow/core/kernels/ops_util.h"
@@ -564,7 +564,7 @@ class DepthwiseConv2dNativeBackpropInputOp : public OpKernel {
     OP_REQUIRES_OK(context, context->GetAttr("padding", &padding_));
 
     // For in_depth == 1 and grouped convolutions.
-    use_cudnn_ = CanUseCudnn();
+    use_cudnn_ = CanUseCudnn() && std::is_same<Device, GPUDevice>::value;
     cudnn_use_autotune_ = CudnnUseAutotune();
     use_cudnn_grouped_conv_ = false;
     dtype_ = DataTypeToEnum<T>::value;
@@ -633,7 +633,8 @@ class DepthwiseConv2dNativeBackpropInputOp : public OpKernel {
       // conv is supported.
       launcher_(context, use_cudnn_, cudnn_use_autotune_, out_backprop,
                 reshaped_filter, /*row_dilation=*/1, /*col_dilation=*/1,
-                stride_, stride_, padding_, in_backprop, data_format_);
+                stride_, stride_, padding_, /*explicit_paddings=*/{},
+                in_backprop, data_format_);
       return;
     }
 
@@ -1037,7 +1038,7 @@ class DepthwiseConv2dNativeBackpropFilterOp : public OpKernel {
     OP_REQUIRES_OK(context, context->GetAttr("padding", &padding_));
 
     // For in_depth == 1 and grouped convolutions.
-    use_cudnn_ = CanUseCudnn();
+    use_cudnn_ = CanUseCudnn() && std::is_same<Device, GPUDevice>::value;
     cudnn_use_autotune_ = CudnnUseAutotune();
     use_cudnn_grouped_conv_ = false;
 
@@ -1076,7 +1077,7 @@ class DepthwiseConv2dNativeBackpropFilterOp : public OpKernel {
                                 {1}, 0, filter_shape, &filter_backprop));
 
     // If there is nothing to compute, return.
-    if (filter_shape.num_elements() == 0) {
+    if (out_backprop.shape().num_elements() == 0) {
       return;
     }
 
@@ -1115,7 +1116,8 @@ class DepthwiseConv2dNativeBackpropFilterOp : public OpKernel {
       // conv is supported.
       launcher_(context, use_cudnn_, cudnn_use_autotune_, out_backprop, input,
                 /*row_dilation=*/1, /*col_dilation=*/1, stride_, stride_,
-                padding_, &reshaped_filter, data_format_);
+                padding_, /*explicit_paddings=*/{}, &reshaped_filter,
+                data_format_);
       return;
     }
 
